@@ -1,0 +1,5 @@
+{
+  "name": "[회사용] 뉴스기자 작성봇",
+  "description": "뉴스기사을 생성하는 챗봇앱이다. 한국미디어창업뉴스 기자를 위해 개발된 앱이다.",
+  "requestFramePermissions": []
+}
