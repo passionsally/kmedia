@@ -1,18 +1,24 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import pages from '@hono/vite-cloudflare-pages';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
+  if (mode === 'client') {
+    // 클라이언트(프론트엔드) 빌드
     return {
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false, // 서버 빌드 결과를 유지
+        rollupOptions: {
+          input: './index.html',
+          output: {
+            entryFileNames: 'assets/[name]-[hash].js',
+            chunkFileNames: 'assets/[name]-[hash].js',
+            assetFileNames: 'assets/[name]-[hash].[ext]'
+          }
+        }
       },
       resolve: {
         alias: {
@@ -20,4 +26,15 @@ export default defineConfig(({ mode }) => {
         }
       }
     };
+  }
+
+  // 서버(Hono) 빌드 - 기본 모드
+  return {
+    plugins: [pages()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      }
+    }
+  };
 });
