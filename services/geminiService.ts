@@ -1,12 +1,24 @@
-// 프론트엔드 → 백엔드 프록시 호출 (API 키는 서버에서만 관리)
-import { BlogParams, PlanningParams, NewsletterParams, EventParams, InformativeParams, CorporateParams, InterviewParams, NewsRewriterParams, ReferenceFile } from "../types";
+// 프론트엔드 → 백엔드 프록시 호출 (사용자의 API 키를 헤더로 전달)
+import { BlogParams, PlanningParams, NewsletterParams, EventParams, InformativeParams, CorporateParams, InterviewParams, NewsRewriterParams } from "../types";
 
 const API_BASE = '/api';
 
+let _apiKey = '';
+
+export const setApiKey = (key: string) => {
+  _apiKey = key;
+};
+
 const postJSON = async (endpoint: string, body: any) => {
+  if (!_apiKey) {
+    throw new Error('API 키가 설정되지 않았습니다. 먼저 Gemini API 키를 등록해 주세요.');
+  }
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': _apiKey
+    },
     body: JSON.stringify(body)
   });
   if (!res.ok) {

@@ -2,13 +2,23 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { GoogleGenAI } from '@google/genai'
 
-type Bindings = {
-  GEMINI_API_KEY: string
-}
-
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono()
 
 app.use('/api/*', cors())
+
+// 에러 핸들링 미들웨어
+app.onError((err, c) => {
+  console.error('API Error:', err.message)
+  const status = err.message.includes('API 키') ? 401 : 500
+  return c.json({ error: err.message || '서버 오류가 발생했습니다.' }, status)
+})
+
+// 모든 /api/* 요청에서 X-API-Key 헤더로부터 사용자의 Gemini API 키를 추출
+const getApiKey = (c: any): string => {
+  const key = c.req.header('X-API-Key')
+  if (!key) throw new Error('API 키가 제공되지 않았습니다.')
+  return key
+}
 
 // ===== 프롬프트 상수 (geminiService.ts에서 이동) =====
 
@@ -61,14 +71,14 @@ const fileToPart = (file: any) => ({
   inlineData: { data: file.data, mimeType: file.mimeType }
 })
 
-const getAI = (apiKey: string) => new GoogleGenAI({ apiKey })
+const getAI = (c: any) => new GoogleGenAI({ apiKey: getApiKey(c) })
 
 // ===== API 엔드포인트 =====
 
 // 트렌딩 키워드
 app.post('/api/trending-keywords', async (c) => {
   const { field } = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `현재 대한민국 ${field} 분야에서 가장 조회수가 높거나 화제가 되는 뉴스 키워드 3가지만 단어 형태로 알려줘. (쉼표로 구분)`,
@@ -81,7 +91,7 @@ app.post('/api/trending-keywords', async (c) => {
 // 추천 기사 URL
 app.post('/api/best-article', async (c) => {
   const { keyword } = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `'${keyword}'와 관련하여 현재 가장 반응이 좋고 공신력 있는 최신 뉴스 기사 1개의 URL과 제목을 알려줘.`,
@@ -95,7 +105,7 @@ app.post('/api/best-article', async (c) => {
 // 기사 전문 추출
 app.post('/api/article-fulltext', async (c) => {
   const { url } = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `다음 URL의 기사 내용을 검색하여 기사 제목과 본문 전체 내용을 그대로 텍스트로 추출해서 알려줘. 기사 내용 외의 광고나 UI 텍스트는 제외해줘. URL: ${url}`,
@@ -107,7 +117,7 @@ app.post('/api/article-fulltext', async (c) => {
 // 스포츠/연예 기사 생성
 app.post('/api/generate/blog', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const prompt = `${SPORTS_ENT_PROMPT}
 [기사 요청 사항]
 - 카테고리: ${params.lectureType}
@@ -130,7 +140,7 @@ ${READABILITY_GUIDELINES}`
 // 신간도서 기사 생성
 app.post('/api/generate/plan', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   const interviewInfo = params.interviews?.map((it: any, i: number) =>
     `${i + 1}. ${it.name || '미정'}(소속: ${it.affiliation || '미지정'}) - 대사: ${it.dialogue || 'AI 자동 생성 요청'}`
@@ -164,7 +174,7 @@ ${READABILITY_GUIDELINES}`
 // 보험/금융 기사 생성
 app.post('/api/generate/newsletter', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   let extraInfo = ""
   if (params.referenceUrl) extraInfo += `\n- 참고 기사 URL: ${params.referenceUrl}`
@@ -195,7 +205,7 @@ ${READABILITY_GUIDELINES}`
 // 강의/행사/세미나 기사 생성
 app.post('/api/generate/event', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   const interviewText = params.interviews?.map((i: any) =>
     `- ${i.name} (${i.affiliation || '소속미정'}, ${i.position || '직책미정'}): "${i.content}"`
@@ -239,7 +249,7 @@ ${READABILITY_GUIDELINES}`
 // 부동산 기사 생성
 app.post('/api/generate/informative', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   let extraInfo = ""
   if (params.referenceUrl) extraInfo += `\n- 참고 기사 URL: ${params.referenceUrl}`
@@ -279,7 +289,7 @@ ${READABILITY_GUIDELINES}`
 // 기업홍보 기사 생성
 app.post('/api/generate/corporate', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   let extraInfo = ""
   if (params.homepageUrl) extraInfo += `\n- 홈페이지: ${params.homepageUrl}`
@@ -326,7 +336,7 @@ ${READABILITY_GUIDELINES}`
 // 인물인터뷰 기사 생성
 app.post('/api/generate/interview', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
 
   let extraInfo = ""
   if (params.referenceUrl) extraInfo += `\n- 참고 기사 URL: ${params.referenceUrl}`
@@ -368,7 +378,7 @@ ${INTERVIEW_SPECIFIC_GUIDELINES}`
 // 뉴스 리라이팅
 app.post('/api/generate/news', async (c) => {
   const params = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const prompt = `## ROLE: 뉴스 리라이터 전문 AI 선임기자.
 [요청 정보]
 - 분야: ${params.newsField}
@@ -396,7 +406,7 @@ ${READABILITY_GUIDELINES}`
 // 기사 수정/리파인
 app.post('/api/refine', async (c) => {
   const { original, instruction } = await c.req.json()
-  const ai = getAI(c.env.GEMINI_API_KEY)
+  const ai = getAI(c)
   const prompt = `원본을 수정 요청 사항에 맞춰 업데이트하십시오. 반드시 기사 작성 지침(한 문장 100-120자, 한 단락 2문장)을 유지하십시오.\n요청: ${instruction}\n\n원본:\n${original}`
   const res = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt })
   return c.json({ text: res.text || "" })
